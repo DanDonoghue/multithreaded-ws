@@ -9,8 +9,8 @@ if( cluster.isMaster ){
 		var thread	= cluster.fork();
 		thread.on("message", function( message ){
 			workers.forEach( function( worker ){
-				if( worker.process.pid != thread.process.pid ){
-					worker.send( message );
+				if( worker.process.pid != message.pid ){
+					worker.send( message.msg );
 				}
 			});
 		});
@@ -22,8 +22,27 @@ if( cluster.isMaster ){
 var server	= http.createServer().listen( 8080 );
 var wss		= new ws( {server: server} );
 
-wss.on( "connection", function( ws ){
-	ws.on( "message", function( message ){
-		process.send( message );
+var connections = new Array();
+
+process.on( "message", function( message ){
+	connections.forEach( function( ws ){
+		ws.send( message );
 	});
+});
+
+wss.on( "connection", function( ws ){
+	ws.send( "Connected to #"+ process.pid );
+	ws.on( "message", function( message ){
+		connections.forEach( function( otherWs ){
+			if( otherWs != ws ){
+				otherWs.send( message );
+			}
+		});
+		process.send( {pid: process.pid, msg: message} );
+	});
+	ws.on( "close", function(){
+		var index	= connections.indexOf( ws );
+		connections.splice( index, 1 );
+	});
+	connections.push( ws );
 });
